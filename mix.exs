@@ -29,7 +29,7 @@ defmodule NxArm.MixProject do
       {:nx, "~> 0.9"},
       # arm_ai owns the NIF. nx_arm provides the Nx.Backend impl
       # and Nx.Defn.Compiler over arm_ai's primitives.
-      {:arm_ai, path: "../arm_ai"},
+      {:arm_ai, github: "mlainez/arm_ai"},
       # nx_arm doesn't itself bridge a model, but rustler must be
       # visible at compile time because :arm_ai pulls in a build of
       # the NIF when no precompiled tarball matches the runtime
