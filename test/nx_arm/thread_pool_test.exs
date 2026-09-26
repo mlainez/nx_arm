@@ -23,10 +23,10 @@ defmodule ArmAI.ThreadPoolTest do
   end
 
   test "Runtime.init_thread_pool defaults to perf-cluster pinning when no config" do
-    prev_count = Application.get_env(:nx_arm, :thread_count)
-    prev_pool = Application.get_env(:nx_arm, :thread_pool)
-    Application.delete_env(:nx_arm, :thread_count)
-    Application.delete_env(:nx_arm, :thread_pool)
+    prev_count = Application.get_env(:arm_ai, :thread_count)
+    prev_pool = Application.get_env(:arm_ai, :thread_pool)
+    Application.delete_env(:arm_ai, :thread_count)
+    Application.delete_env(:arm_ai, :thread_pool)
 
     try do
       result = ArmAI.Runtime.init_thread_pool()
@@ -35,8 +35,8 @@ defmodule ArmAI.ThreadPoolTest do
                      when status in [:ok, :already_initialised] and is_integer(n) and is_list(perf),
                     result)
     after
-      if prev_count, do: Application.put_env(:nx_arm, :thread_count, prev_count)
-      if prev_pool, do: Application.put_env(:nx_arm, :thread_pool, prev_pool)
+      if prev_count, do: Application.put_env(:arm_ai, :thread_count, prev_count)
+      if prev_pool, do: Application.put_env(:arm_ai, :thread_pool, prev_pool)
     end
   end
 
