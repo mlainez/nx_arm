@@ -3,31 +3,37 @@ defmodule NxArm.Backend do
   Nx backend for ARM CPUs via NEON intrinsics + rayon parallelism.
 
   Tensors are stored as plain Erlang binaries inside an `%NxArm.Backend{}`
-  struct. Every Nx callback dispatches directly to a `ArmAI.Native` NIF —
-  no GPU device context, no `buffer_read` / `buffer_write` roundtrips.
+  struct, and callbacks dispatch to `ArmAI.Native` NIFs.
 
   ## Coverage
 
+  Native paths are f32 unless noted; other types fall back.
+
     * Binary elementwise: `add`, `subtract`, `multiply`, `divide`, `max`,
-      `min`, `pow`, `atan2`, `remainder` — same-shape and scalar broadcast
+      `min`, `pow`, `atan2`, `remainder` — same-shape, scalar, and
+      broadcast operands
     * Unary elementwise: `negate`, `exp`, `log`, `tanh`, `sigmoid`, `abs`,
       `sqrt`, `rsqrt`, `cbrt`, `expm1`, `log1p`, `sin`, `cos`, `tan`,
       `asin`, `acos`, `atan`, `sinh`, `cosh`, `asinh`, `acosh`, `atanh`,
       `ceil`, `floor`, `round`, `sign`, `erf`, `erfc`
-    * Linear algebra: `dot` (2-D via batched matmul with b=1, 3-D+ via
-      fold-into-M, 4-D batched for transformer attention)
-    * Reductions: `sum`, `reduce_max`, `reduce_min` (axis-wise and full)
-    * Shape: `reshape`, `squeeze`, `bitcast` (zero-copy metadata), plus
-      `broadcast`, `transpose`, `concatenate` via dedicated NIFs
-    * Conv2D: `conv/4` via NEON f32 conv NIF
+    * Linear algebra: `dot` (2-D, batched, and N-D × 2-D), `conv` (4-D,
+      including depthwise)
+    * Reductions: `sum`, `reduce_max`, `reduce_min` (all axes or the last
+      axis), `all`, `any`, `product`, `argmax`, `argmin`
+    * Shape and data movement: `reshape`, `squeeze`, `bitcast` (metadata
+      only), `broadcast`, `transpose`, `concatenate`, `stack`, `pad`,
+      `reverse`, `slice`, `put_slice`, `gather`, `select`, `clip`,
+      `as_type`, `sort`, `argsort`, windowed reductions, indexed add/put
+    * `fft` / `ifft` on 1-D complex tensors at full length
 
-  Other ops fall back to `Nx.BinaryBackend`.
+  Everything else (comparisons, bitwise and logical ops, integer types,
+  `triangular_solve`, ...) falls back to `Nx.BinaryBackend`.
 
   ## Usage
 
       Nx.global_default_backend(NxArm.Backend)
       # or
-      gpu_tensor = Nx.backend_transfer(cpu_tensor, NxArm.Backend)
+      tensor = Nx.backend_transfer(tensor, NxArm.Backend)
   """
 
   @behaviour Nx.Backend
@@ -195,13 +201,17 @@ defmodule NxArm.Backend do
 
         # `right` is a scalar (any numeric dtype) and `left` matches output.
         # The scalar gets cast to f32 (covers Nx.add(x, 1) where 1 is :s64).
-        Nx.size(right) == 1 and Nx.type(left) == {:f, 32} and out_f32? and
+        # (The scalar NIF implements add/subtract/multiply/divide/
+        # max/min/pow only; atan2 and remainder take the broadcast path.)
+        unquote(op) not in [:atan2, :remainder] and
+          Nx.size(right) == 1 and Nx.type(left) == {:f, 32} and out_f32? and
             Nx.shape(left) == Nx.shape(out) ->
           bin = ArmAI.Native.scalar_binary_f32_op(unquote(op_name), "ab", bin_of(left), to_f32_scalar(right))
           put_in(out.data, %__MODULE__{bin: bin})
 
         # `left` is a scalar.
-        Nx.size(left) == 1 and Nx.type(right) == {:f, 32} and out_f32? and
+        unquote(op) not in [:atan2, :remainder] and
+          Nx.size(left) == 1 and Nx.type(right) == {:f, 32} and out_f32? and
             Nx.shape(right) == Nx.shape(out) ->
           bin = ArmAI.Native.scalar_binary_f32_op(unquote(op_name), "ba", bin_of(right), to_f32_scalar(left))
           put_in(out.data, %__MODULE__{bin: bin})
@@ -1208,13 +1218,16 @@ defmodule NxArm.Backend do
     ArmAI.Native.as_type_op(bin, dtype_code(type), dtype_code({:f, 32}), n)
   end
 
+  defp native_fft?(tensor, opts) do
+    Nx.type(tensor) == {:c, 64} and Nx.rank(tensor) == 1 and
+      Keyword.get(opts, :length, Nx.size(tensor)) == Nx.size(tensor)
+  end
+
   @impl true
   def fft(out, tensor, opts) do
     cond do
-      not function_exported?(ArmAI.Native, :fft_complex_op, 1) ->
-        fallback(:fft, [out, tensor, opts])
-
-      Nx.type(tensor) != {:c, 64} ->
+      # The NIF transforms one contiguous 1-D buffer at its full length.
+      not native_fft?(tensor, opts) ->
         fallback(:fft, [out, tensor, opts])
 
       true ->
@@ -1232,10 +1245,8 @@ defmodule NxArm.Backend do
   @impl true
   def ifft(out, tensor, opts) do
     cond do
-      not function_exported?(ArmAI.Native, :ifft_complex_op, 1) ->
-        fallback(:ifft, [out, tensor, opts])
-
-      Nx.type(tensor) != {:c, 64} ->
+      # The NIF transforms one contiguous 1-D buffer at its full length.
+      not native_fft?(tensor, opts) ->
         fallback(:ifft, [out, tensor, opts])
 
       true ->
