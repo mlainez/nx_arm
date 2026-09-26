@@ -1,27 +1,17 @@
 defmodule NxArm do
   @moduledoc """
-  Nx backend + Nx-tensor model wrappers for ARM CPUs, built on the
-  `:arm_ai` NEON inference NIF.
-
-  ## Backend
+  `Nx.Backend` and `Nx.Defn.Compiler` for ARM CPUs, built on the
+  `:arm_ai` NEON kernels.
 
       Nx.global_default_backend(NxArm.Backend)
+      Nx.Defn.default_options(compiler: NxArm.Compiler)
 
-  See `NxArm.Backend` for the supported ops + fallbacks, and
-  `NxArm.Compiler` for the Defn pattern fuser.
+  See `NxArm.Backend` for the natively supported ops (everything else
+  falls back to `Nx.BinaryBackend`) and `NxArm.Compiler` for the Defn
+  evaluator with softmax / GELU / LayerNorm fusion.
 
-  ## Nx-tensor model wrappers
-
-  All under `NxArm.Models.*` — Whisper, ONNX, YOLO, Silero VAD,
-  Piper, OCR, Face, Stable Diffusion. They take/return Nx tensors
-  and assume the user has set NxArm.Backend as the default.
-
-  ## Companion package
-
-  `:arm_ai` ships the underlying NIF + Nx-free APIs (LlamaCandle,
-  Phonemizer). nx_arm depends on it. If you only need the
-  pure-binary inference API without Nx, depend on `:arm_ai`
-  directly.
+  If you only need quantized LLM inference without Nx, depend on
+  `:arm_ai` directly and use `ArmAI.LlamaCandle`.
   """
 
   @doc """

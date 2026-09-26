@@ -4,42 +4,47 @@
 >
 > This package was written for the **Goatmire Elixir workshop** on running
 > Nerves on Fairphone 3 hardware. It exists for tinkering and teaching.
->
-> It is **not an actively maintained project** (yet). There are no
-> stability guarantees, APIs will change without notice, and parts of it
-> are wired-but-unproven. Treat it as a starting point to hack on, not as
-> a dependency to build a product on.
+> There are no stability guarantees and APIs will change without notice.
 >
 > See [`nerves_ai`](https://github.com/mlainez/nerves_ai) for the full
 > stack and the workshop context.
 
-Nx backend + Nx-tensor model wrappers for ARM CPUs.
-
-Built on top of [`arm_ai`](https://github.com/mlainez/arm_ai),
-which ships the underlying NIF (NEON kernels, candle, tract-onnx,
-symphonia, image) and the Nx-free APIs (LlamaCandle, Phonemizer).
+`Nx.Backend` and `Nx.Defn.Compiler` for ARM CPUs, built on the NEON
+kernels in [`arm_ai`](https://github.com/mlainez/arm_ai).
 
 ## What's in here
 
-- `NxArm.Backend` — `Nx.Backend` implementation. Set as default:
+- `NxArm.Backend` — an `Nx.Backend` implementation. f32 elementwise ops,
+  `dot`, reductions, `conv`, shape ops, gather/scatter, windows, sort and
+  1-D FFT run natively; everything else falls back to `Nx.BinaryBackend`.
 
       Nx.global_default_backend(NxArm.Backend)
 
-- `NxArm.Compiler` — `Nx.Defn.Compiler` with pattern fusion
-  (softmax, GELU, LayerNorm) for Bumblebee / Axon graphs.
-- Helpers: `NxArm.LLM`, `NxArm.KVCache`, `NxArm.Sampling`,
-  `NxArm.Quantized`, `NxArm.QuantizedConv`, `NxArm.FFT`,
-  `NxArm.Image`, `NxArm.Audio`, `NxArm.Vision`,
-  `NxArm.Detection`, `NxArm.Embeddings`.
-- `NxArm.Models.*` — Nx-tensor wrappers over `arm_ai`'s NIF for
-  Whisper, ONNX, YOLO, Silero VAD, Piper, OCR, Face, Stable
-  Diffusion.
+- `NxArm.Compiler` — an `Nx.Defn.Compiler` that evaluates graphs on
+  `NxArm.Backend` and fuses softmax, GELU and LayerNorm subgraphs into
+  single NIF calls. Works with Bumblebee / Axon via `compiler:`.
+- `NxArm.softmax/2` — fused last-axis softmax.
+
+## Install
+
+```elixir
+defp deps do
+  [{:nx_arm, github: "mlainez/nx_arm"}]
+end
+```
+
+This pulls in `arm_ai`, whose NIF builds from source, so the build
+machine needs a Rust toolchain.
 
 ## Companion package: `arm_ai`
 
-If you DON'T need Nx tensors (e.g. you're driving the LLM
-directly with token id lists), depend on `arm_ai` instead of
-`nx_arm` — same NIF, smaller surface, no Nx dep.
+If you don't need Nx tensors (for example you drive an LLM with token id
+lists), depend on `arm_ai` alone and use `ArmAI.LlamaCandle`.
+
+## Toolchain
+
+Built and tested with Erlang/OTP 29.1.1 and Elixir 1.20.4 against Nx 0.12,
+matching the official Nerves systems (see `.tool-versions`).
 
 ## License
 

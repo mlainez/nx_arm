@@ -2,23 +2,17 @@ defmodule NxArm.Compiler do
   @moduledoc """
   Custom `Nx.Defn.Compiler` for `NxArm.Backend`.
 
-  ## Phase 1 — identity (current)
+  It evaluates the `Nx.Defn.Expr` graph against `NxArm.Backend`
+  (`__to_backend__/1` returns `NxArm.Backend`, so creation and constant
+  ops land on it), after a rewrite pass that:
 
-  This compiler walks the `Nx.Defn.Expr` graph and dispatches each
-  op directly to `NxArm.Backend`. Behaviourally equivalent to
-  `Nx.Defn.Evaluator` configured against our backend, plus:
+    * drops dead broadcasts and inference-time dropout,
+    * folds constants,
+    * replaces softmax, GELU and LayerNorm subgraphs with fused nodes
+      (`:nxarm_softmax`, `:nxarm_gelu`, `:nxarm_layernorm`) that dispatch
+      to single NIF calls.
 
-    * `__to_backend__/1` returns `NxArm.Backend` so any creation /
-      constant op lands on us by default;
-    * The graph is walked through a rewriter pass that's a no-op
-      today — the hook is in place for the fusion phase.
-
-  ## Phase 2 — pattern fusion (next)
-
-  The rewriter pass will pattern-detect softmax, GELU, and LayerNorm
-  subgraphs and replace them with single custom-op Expr nodes
-  (`:nxarm_softmax`, `:nxarm_gelu`, `:nxarm_layernorm`) that dispatch
-  to fused NIFs.
+  Inputs to a jitted function should be on `NxArm.Backend`.
 
   ## Usage
 
