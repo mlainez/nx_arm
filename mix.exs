@@ -7,13 +7,13 @@ defmodule NxArm.MixProject do
     [
       app: :nx_arm,
       version: @version,
-      elixir: "~> 1.15",
+      elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "NxArm",
       description:
-        "Nx backend + Nx-tensor model wrappers for ARM CPUs, built on the arm_ai NEON inference NIF",
+        "Nx backend + Defn compiler for ARM CPUs, built on the arm_ai NEON kernels",
       package: package(),
       docs: [main: "readme", extras: ["README.md"]]
     ]
@@ -26,16 +26,10 @@ defmodule NxArm.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.9"},
+      {:nx, "~> 0.12.0"},
       # arm_ai owns the NIF. nx_arm provides the Nx.Backend impl
       # and Nx.Defn.Compiler over arm_ai's primitives.
       {:arm_ai, github: "mlainez/arm_ai"},
-      # nx_arm doesn't itself bridge a model, but rustler must be
-      # visible at compile time because :arm_ai pulls in a build of
-      # the NIF when no precompiled tarball matches the runtime
-      # triple (i.e., when developing locally).
-      {:rustler, "~> 0.36", optional: true},
-      {:rustler_precompiled, "~> 0.8"},
       {:axon, "~> 0.7", only: [:test]},
       {:bumblebee, "~> 0.6", only: [:test]},
       {:stream_data, "~> 1.1", only: [:test]}
